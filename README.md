@@ -13,7 +13,7 @@ This project is a turn-based Chessboard application built using WebSocket, Golan
 ## Installation
 
 1. Clone the repository: `git clone https://github.com/mohammadshaad/SHAAD-21BCE1542.git`
-2. Navigate to the project directory: `cd chess-like-game`
+2. Navigate to the project directory: `cd SHAAD-21BCE1542`
 3. Install dependencies:
     - Backend: `cd server && go mod download`
     - Frontend: `cd frontend && npm install`
