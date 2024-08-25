@@ -1,0 +1,48 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Output files
+*.out
+
+# Vendor directories (with Go modules enabled, this line might not be necessary)
+vendor/
+
+# Dependency directories (remove the comment if you have a vendor dir)
+# /vendor/
+
+# Go test binaries
+*.test
+
+# IDE/editor-specific files
+.idea/
+.vscode/
+*.swp
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+
+# Coverage output
+coverage.out
+
+# Compiled shared objects (e.g. DLLs)
+*.cgo1.go
+*.cgo2.c
+
+# Webpack/Bundler files
+node_modules/
+
+# Go build cache
+/go-build
+
+# Local Go environment
+.env
+
+# Executable files
+main
+
+.DS_Store
