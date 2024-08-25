@@ -1,67 +1,58 @@
 // @ts-nocheck
 
-import { useEffect, useState } from "react";
-import styles from "../styles/Home.module.css";
+import { useState, useEffect } from 'react';
 
-const HomePage = () => {
-  const [gameState, setGameState] = useState({
-    grid: Array(5).fill(null).map(() => Array(5).fill("")),
-    turn: "Player1",
-  });
-  const [input, setInput] = useState("");
+export default function Home() {
+  const [gameState, setGameState] = useState(null);
   const [ws, setWs] = useState(null);
+  const [character, setCharacter] = useState('');
+  const [move, setMove] = useState('');
 
   useEffect(() => {
-    const socket = new WebSocket("ws://localhost:8080/ws");
-    setWs(socket);
-
+    const socket = new WebSocket('ws://localhost:8080/ws');
     socket.onmessage = (event) => {
       const state = JSON.parse(event.data);
       setGameState(state);
     };
+    setWs(socket);
 
-    socket.onclose = () => console.log("WebSocket connection closed");
-
-    return () => socket.close();
+    return () => {
+      socket.close();
+    };
   }, []);
 
   const sendMove = () => {
-    if (ws && input) {
-      const move = { player: gameState.turn, move: input };
-      ws.send(JSON.stringify(move));
-      setInput("");
-    }
+    const player = gameState.turn === 'A' ? 'A' : 'B';
+    ws.send(JSON.stringify({
+      action: 'move',
+      data: { player, character, move }
+    }));
+    setCharacter('');
+    setMove('');
   };
 
+  if (!gameState) return <div>Connecting...</div>;
+
   return (
-    <div className={styles.container}>
-      <h1 className={styles.title}>Turn-based Chess-like Game</h1>
-      <div className={styles.board}>
-        {gameState.grid?.map((row, rowIndex) => (
-          row.map((cell, colIndex) => (
-            <div key={`${rowIndex}-${colIndex}`} className={styles.cell}>
-              {cell}
+    <div>
+      <h1>Turn-Based Chess-like Game</h1>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 50px)', gridGap: '1px', width: '256px', margin: '0 auto' }}>
+        {gameState.board?.map((row, x) =>
+          row.map((cell, y) => (
+            <div key={`${x}-${y}`} style={{ width: '50px', height: '50px', backgroundColor: cell ? '#ddd' : '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setCharacter(`${x},${y}`)}>
+              {cell ? <p>{cell}</p> : ''}
             </div>
           ))
-        ))}
+        )}
       </div>
-      <div className={styles.controls}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Enter move (e.g., P1:L)"
-          className={styles.input}
-        />
-        <button onClick={sendMove} className={styles.button}>
-          Send Move
-        </button>
+      <div style={{ margin: '20px', textAlign: 'center' }}>
+        <input type="text" value={character} onChange={(e) => setCharacter(e.target.value)} placeholder="Character (e.g., P1:0,1)" />
+        <input type="text" value={move} onChange={(e) => setMove(e.target.value)} placeholder="Move (e.g., R)" />
+        <button onClick={sendMove}>Send Move</button>
       </div>
-      <div className={styles.turnIndicator}>
-        Current Turn: {gameState.turn}
+      <div id="status" style={{ marginTop: '20px', textAlign: 'center' }}>
+        {gameState.gameOver ? `Game Over! Winner: Player ${gameState.gameOver}` : `Player ${gameState.turn}'s turn`}
       </div>
     </div>
   );
-};
-
-export default HomePage;
+}
