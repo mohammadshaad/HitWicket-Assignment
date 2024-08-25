@@ -1,89 +1,102 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
+
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
 type GameState struct {
-	Grid [5][5]string `json:"grid"`
-	Turn string       `json:"turn"`
-}
-
-type Move struct {
-	Player string `json:"player"`
-	Move   string `json:"move"`
+	Board [5][5]*string `json:"board"`
+	Turn  string        `json:"turn"`
 }
 
 var gameState = GameState{
-	Grid: [5][5]string{},
-	Turn: "Player1",
+	Board: [5][5]*string{},
+	Turn:  "A",
 }
 
-func main() {
-	http.HandleFunc("/ws", handleConnection)
-	fmt.Println("Server started on :8080")
-	http.ListenAndServe(":8080", nil)
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
-func handleConnection(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		fmt.Println("Error while connecting:", err)
-		return
+func broadcastGameState(clients map[*websocket.Conn]bool) {
+	for client := range clients {
+		if client != nil {
+			err := client.WriteJSON(gameState)
+			if err != nil {
+				log.Printf("Error broadcasting state: %v", err)
+				client.Close()
+				delete(clients, client)
+			}
+		}
 	}
-	defer conn.Close()
+}
 
-	fmt.Println("Client connected")
+func handleConnections(clients map[*websocket.Conn]bool, ws *websocket.Conn) {
+	defer ws.Close()
+	clients[ws] = true
+	ws.WriteJSON(gameState)
 
 	for {
-		_, msg, err := conn.ReadMessage()
+		var message map[string]interface{}
+		err := ws.ReadJSON(&message)
 		if err != nil {
-			fmt.Println("Error reading message:", err)
+			log.Printf("Error reading message: %v", err)
+			delete(clients, ws)
 			break
 		}
 
-		var move Move
-		if err := json.Unmarshal(msg, &move); err != nil {
-			fmt.Println("Error unmarshaling message:", err)
+		// Remove the declaration of the 'action' variable
+		data := message["data"].(map[string]interface{})
+		player := data["player"].(string)
+		character := data["character"].(string)
+		move := data["move"].(string)
+
+		if player != gameState.Turn {
+			ws.WriteJSON(map[string]string{"error": "Not your turn"})
 			continue
 		}
 
-		if move.Player != gameState.Turn {
-			err := conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"Not your turn"}`))
-			if err != nil {
-				fmt.Println("Error sending message:", err)
+		if !isValidMove(character, move, &gameState) {
+			ws.WriteJSON(map[string]string{"error": "Invalid move"})
+			continue
+		}
+
+		if !applyMove(character, move, &gameState) {
+			ws.WriteJSON(map[string]string{"error": "Move failed"})
+			continue
+		}
+
+		winner := checkWin(&gameState)
+		if winner != "" {
+			broadcastGameState(clients)
+			for client := range clients {
+				client.WriteJSON(map[string]string{"gameOver": winner})
 			}
-			continue
+			return
 		}
 
-		// Handle game move
-		// For simplicity, we'll just toggle turns here
-		gameState.Turn = "Player2"
-		if gameState.Turn == "Player2" {
-			gameState.Turn = "Player1"
-		}
-
-		// Broadcast updated game state
-		broadcastGameState(conn)
+		gameState.Turn = toggleTurn(gameState.Turn)
+		broadcastGameState(clients)
 	}
 }
 
-func broadcastGameState(conn *websocket.Conn) {
-	state, err := json.Marshal(gameState)
-	if err != nil {
-		fmt.Println("Error marshaling game state:", err)
-		return
-	}
+func main() {
+	clients := make(map[*websocket.Conn]bool)
 
-	err = conn.WriteMessage(websocket.TextMessage, state)
-	if err != nil {
-		fmt.Println("Error sending game state:", err)
-	}
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Printf("Error upgrading to websocket: %v", err)
+			return
+		}
+		handleConnections(clients, ws)
+	})
+
+	log.Println("Server started on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
